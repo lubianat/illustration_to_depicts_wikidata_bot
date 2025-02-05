@@ -1,10 +1,70 @@
 import requests
 from SPARQLWrapper import SPARQLWrapper, JSON
+from wdcuration import query_wikidata
+import requests
+import urllib.parse
+
+def get_commons_file_last_revision(file_name: str) -> int:
+    """
+    Returns the last revision ID for a given file on Wikimedia Commons.
+    Example of file_name: 'File:Example.jpg'
+    """
+    # Commons API endpoint
+    url = "https://commons.wikimedia.org/w/api.php"
+    
+    # Prepare parameters for the query
+    params = {
+        "action": "query",
+        "prop": "info",
+        "titles": f"File:{file_name}",
+        "format": "json",
+    }
+
+    # Make the GET request
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    data = response.json()
+
+    # The "query" -> "pages" -> { pageid: {...} }
+    pages = data.get("query", {}).get("pages", {})
+    if not pages:
+        return 0  # or raise an exception if desired
+
+    # There's typically only one page returned for a unique title
+    _, page_info = next(iter(pages.items()))
+
+    return page_info.get("lastrevid", 0)
+
+def build_commons_file_permalink(file_name: str) -> str:
+    """
+    Builds a URL pointing to the specific revision of the file on Commons.
+    """
+    # Convert spaces to underscores so it works in the URL
+    lastrevid = get_commons_file_last_revision(file_name)
+    title_encoded = urllib.parse.quote(file_name.replace(" ", "_"), safe=":/")
+    return f"https://commons.wikimedia.org/w/index.php?title={title_encoded}&oldid={lastrevid}"
+
 # Base URLs
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
+
+
+def get_existing_claims(wikidata_item: str, prop_nr: str) -> list:
+    """
+    Fetch existing claims for a Wikidata item and return them as a list.
+    (We only need to know if ANY claims exist, but let's store them for clarity)
+    """
+    query = f"""
+    SELECT ?value WHERE {{
+      wd:{wikidata_item} wdt:{prop_nr} ?value.
+    }}
+    """
+    results = query_wikidata(query)
+    if not results:
+        return []
+    return [r["value"].split("/")[-1] for r in results]
 
 
 # Fetch subcategories from Commons
