@@ -103,6 +103,9 @@ def get_file_count(category, verbose=False):
 
 # Fetch Wikidata item by taxon name
 def fetch_wikidata_item(taxon_name, verbose=False):
+    headers = {
+        "User-Agent": "YourBotName/1.0 (your.email@example.com)"
+    }
     params = {
         "action": "wbsearchentities",
         "format": "json",
@@ -111,7 +114,7 @@ def fetch_wikidata_item(taxon_name, verbose=False):
         "type": "item",
         "props": "descriptions|aliases",
     }
-    response = requests.get(WIKIDATA_API, params=params).json()
+    response = requests.get(WIKIDATA_API, headers=headers, params=params).json()
     for item in response.get("search", []):
         if verbose:
             print(f"Found Wikidata item for {taxon_name}: {item['id']}.")
