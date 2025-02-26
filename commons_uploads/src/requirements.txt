@@ -1,0 +1,7 @@
+tqdm
+click
+SPARQLWrapper
+requests
+wdcuration
+pyyaml
+wikibaseintegrator 
