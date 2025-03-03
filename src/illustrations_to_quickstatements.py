@@ -10,7 +10,7 @@ import random
 from login import USERNAME, PASSWORD
 from helper import (
     get_subcategories,
-    fetch_wikidata_item,
+    get_qid_from_taxon_name,
     get_files_in_category,
     get_existing_claims,
     build_commons_file_permalink
@@ -125,7 +125,7 @@ def process_family_category(category, verbose, edit_group_snippet):
                 logging.info(f"Skipping already processed species: {species_name}")
                 continue
 
-            wikidata_item = fetch_wikidata_item(species_name, verbose=verbose)
+            wikidata_item = get_qid_from_taxon_name(species_name, verbose=verbose)
             if not wikidata_item:
                 # Even if no Wikidata item is found, mark species as processed to avoid rechecking it later
                 processed_species.add(species_name)

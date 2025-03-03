@@ -101,27 +101,16 @@ def get_file_count(category, verbose=False):
         print(f"Found {len(files)} files in {category}.")
     return len(files)
 
-# Fetch Wikidata item by taxon name
-def fetch_wikidata_item(taxon_name, verbose=False):
-    headers = {
-        "User-Agent": "YourBotName/1.0 (your.email@example.com)"
-    }
-    params = {
-        "action": "wbsearchentities",
-        "format": "json",
-        "search": taxon_name,
-        "language": "en",
-        "type": "item",
-        "props": "descriptions|aliases",
-    }
-    response = requests.get(WIKIDATA_API, headers=headers, params=params).json()
-    for item in response.get("search", []):
-        if verbose:
-            print(f"Found Wikidata item for {taxon_name}: {item['id']}.")
-        return item["id"]
-    if verbose:
-        print(f"No Wikidata item found for {taxon_name}.")
-    return None
+def get_qid_from_taxon_name(taxon_name):
+    query = f"""
+    SELECT ?item WHERE {{
+        ?item wdt:P225 "{taxon_name}".
+    }}
+    """
+    result = query_wikidata(query)
+    if len(result) == 1:
+        return result[0]["item"].replace("http://www.wikidata.org/entity/", "")
+    return ""
 
 # Fetch file names from a category
 def get_files_in_category(category, verbose=False):

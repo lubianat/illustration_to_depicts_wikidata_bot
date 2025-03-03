@@ -10,7 +10,7 @@ import random
 from login import USERNAME, PASSWORD
 from helper import (
     get_subcategories,
-    fetch_wikidata_item,
+    get_qid_from_taxon_name,
     get_files_in_category,
     get_existing_claims,
     build_commons_file_permalink
@@ -34,6 +34,8 @@ login_instance = wbi_login.Login(
     mediawiki_api_url=wbi_config['MEDIAWIKI_API_URL']
 )
 wbi = WikibaseIntegrator(login=login_instance)
+
+
 
 HERE = Path(__file__).parent
 
@@ -111,6 +113,8 @@ def process_family_category(category, verbose, edit_group_snippet):
 
         taxa = get_subcategories(genus, verbose=verbose)
         for taxon in tqdm(taxa, desc=f"Processing taxa in {genus}", leave=False):
+
+
             # Use regex to extract the species name from the category title
             match = re.match(r"([^\\-]+) - botanical illustrations", taxon)
             if not match:
@@ -127,7 +131,7 @@ def process_family_category(category, verbose, edit_group_snippet):
                 logging.info(f"Skipping already processed species: {species_name}")
                 continue
 
-            wikidata_item = fetch_wikidata_item(species_name, verbose=verbose)
+            wikidata_item = get_qid_from_taxon_name(species_name)
             if not wikidata_item:
                 # Even if no Wikidata item is found, mark species as processed to avoid rechecking it later
                 processed_species.add(species_name)
@@ -181,9 +185,16 @@ def add_depicts_statements(files: list,depicted_item: str, edit_group_snippet=""
     Wikidata item and add it in one write, if needed.
     """
     for file_name in files:
-        data = get_media_info_id(file_name)
-        mediainfo_id = data
-        media = wbi.mediainfo.get(entity_id=mediainfo_id)
+        try:
+            data = get_media_info_id(file_name)
+            mediainfo_id = data
+            media = wbi.mediainfo.get(entity_id=mediainfo_id)
+        except Exception as e:
+            if "The MW API returned that the entity was missing." in str(e):
+                media = wbi.mediainfo.new(id=mediainfo_id)
+            else:
+                logging.error(f"Could not load MediaInfo for File:{file_name}: {e}")
+                continue
         new_statements = []
         add_depicts_claim(depicted_item, new_statements, media, file_name)
         edit_summary = f"Add depicts claim for {depicted_item} {edit_group_snippet}"
@@ -198,12 +209,44 @@ def add_depicts_statements(files: list,depicted_item: str, edit_group_snippet=""
         logging.info(f"No SDC data to add for {file_name}, skipping...")
 
 def add_depicts_claim(qid, new_statements, media, file_name, set_prominent=False):
-    if set_prominent:
-        rank = "preferred"
-    else:
+
+    # Get all the categories for the file:
+    params = {
+        "action": "query",
+        "titles": f"File:{file_name}",
+        "prop": "categories",
+        "format": "json"
+    }
+    try:
+        response = requests.get("https://commons.wikimedia.org/w/api.php", params=params)
+        data = response.json()
+        pages = data.get("query", {}).get("pages", {})
+        if not pages:
+            logging.error(f"No page data found for the file: {file_name}")
+            pass
+        page = next(iter(pages.values()))
+        if "categories" in page:
+            categories = [cat["title"] for cat in page["categories"]]
+            logging.info(f"Categories for {file_name}: {categories}")
+        else:
+            logging.error(f"No categories found for the file: {file_name}")
+            pass
+    except requests.RequestException as e:
+        logging.error(f"API request failed for {file_name}: {e}")
+        pass
+
+    for category in categories:
+        list_of_taxonomic_categories = []
+        if get_qid_from_taxon_name(category.split("-")[0].strip()):
+            list_of_taxonomic_categories.append(category)
+
+    if len(list_of_taxonomic_categories) > 1:
         rank = "normal"
+    else:
+        rank = "preferred"
+
     claims_in_media = media.claims.get_json()
-    if "P180" in media.claims.get_json():
+    if "P180" in claims_in_media:
         p180_values = media.claims.get_json()["P180"]
         
         for value in p180_values:
