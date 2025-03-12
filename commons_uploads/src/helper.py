@@ -4,6 +4,7 @@ from wdcuration import query_wikidata
 import requests
 import urllib.parse
 
+
 def get_commons_file_last_revision(file_name: str) -> int:
     """
     Returns the last revision ID for a given file on Wikimedia Commons.
@@ -11,7 +12,7 @@ def get_commons_file_last_revision(file_name: str) -> int:
     """
     # Commons API endpoint
     url = "https://commons.wikimedia.org/w/api.php"
-    
+
     # Prepare parameters for the query
     params = {
         "action": "query",
@@ -35,6 +36,7 @@ def get_commons_file_last_revision(file_name: str) -> int:
 
     return page_info.get("lastrevid", 0)
 
+
 def build_commons_file_permalink(file_name: str) -> str:
     """
     Builds a URL pointing to the specific revision of the file on Commons.
@@ -43,6 +45,7 @@ def build_commons_file_permalink(file_name: str) -> str:
     lastrevid = get_commons_file_last_revision(file_name)
     title_encoded = urllib.parse.quote(file_name.replace(" ", "_"), safe=":/")
     return f"https://commons.wikimedia.org/w/index.php?title={title_encoded}&oldid={lastrevid}"
+
 
 # Base URLs
 
@@ -78,12 +81,15 @@ def get_subcategories(category, verbose=False):
         "cmlimit": "max",
     }
     response = requests.get(COMMONS_API, params=params).json()
-    subcategories = [cat["title"] for cat in response.get("query", {}).get("categorymembers", [])]
+    subcategories = [
+        cat["title"] for cat in response.get("query", {}).get("categorymembers", [])
+    ]
     if verbose:
         print(f"Found {len(subcategories)} subcategories under {category}.")
     # Remove Category: prefix
     subcategories = [sub.replace("Category:", "") for sub in subcategories]
     return subcategories
+
 
 # Get file count for a category
 def get_file_count(category, verbose=False):
@@ -101,7 +107,11 @@ def get_file_count(category, verbose=False):
         print(f"Found {len(files)} files in {category}.")
     return len(files)
 
+
 def get_qid_from_taxon_name(taxon_name):
+    if '"' in taxon_name or "Category:" in taxon_name:
+        return ""
+
     query = f"""
     SELECT ?item WHERE {{
         ?item wdt:P225 "{taxon_name}".
@@ -111,6 +121,7 @@ def get_qid_from_taxon_name(taxon_name):
     if len(result) == 1:
         return result[0]["item"].replace("http://www.wikidata.org/entity/", "")
     return ""
+
 
 # Fetch file names from a category
 def get_files_in_category(category, verbose=False):
@@ -123,10 +134,14 @@ def get_files_in_category(category, verbose=False):
         "cmlimit": "max",
     }
     response = requests.get(COMMONS_API, params=params).json()
-    files = [file["title"].replace("File:", "") for file in response.get("query", {}).get("categorymembers", [])]
+    files = [
+        file["title"].replace("File:", "")
+        for file in response.get("query", {}).get("categorymembers", [])
+    ]
     if verbose:
         print(f"Found {len(files)} files in {category}: {files}")
     return files
+
 
 # Fetch M-ID for a file on Wikimedia Commons
 def fetch_m_id(filename, verbose=False):
@@ -146,6 +161,7 @@ def fetch_m_id(filename, verbose=False):
     if verbose:
         print(f"No M-ID found for {filename}.")
     return None
+
 
 # Check for P18 (image) values in batch
 def check_missing_p18(wikidata_ids, verbose=False):
